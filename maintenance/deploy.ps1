@@ -1,3 +1,4 @@
+Set-Location -Path ${PSScriptRoot}
 mvn clean package
 gcloud beta functions deploy maintenance `
   --entry-point=com.syakeapps.tsn.maintenance.application.Function `

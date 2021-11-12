@@ -136,6 +136,22 @@ public class Function implements BackgroundFunction<PubSubMessage> {
             LOGGER.info("保存済Twitchトークンの妥当性確認が完了しました.");
             // <<<<<<<<<< 保存済Twitchトークンの妥当性確認
 
+            // >>>>>>>>>> 現サブスクリプションIDの取得
+            LOGGER.info("現サブスクリプションIDの取得を開始します.");
+
+            List<String> ids = getSubscriptionIds(token, clientId);
+
+            LOGGER.info(String.format("現サブスクリプションIDの取得が完了しました. ID_SIZE=[%d]", ids.size()));
+            // <<<<<<<<<< 現サブスクリプションIDの取得
+
+            // >>>>>>>>>> 現サブスクリプションの破棄
+            LOGGER.info("現サブスクリプションの破棄を開始します.");
+
+            revokeSubscriptions(token, clientId, ids);
+
+            LOGGER.info("現サブスクリプションの破棄が完了しました.");
+            // <<<<<<<<<< 現サブスクリプションの破棄
+
             // >>>>>>>>>> Twitchフォロイ―リストの取得
             LOGGER.info("Twitchフォロイ―リストの取得を開始します.");
 
@@ -284,6 +300,56 @@ public class Function implements BackgroundFunction<PubSubMessage> {
                         }).get(ACCESS_TOKEN);
             } else {
                 throw new Exception("Failed to generate token.");
+            }
+        }
+    }
+
+    @SuppressWarnings({ "unchecked", "serial" })
+    private List<String> getSubscriptionIds(String token, String clientId) throws IOException {
+        Map<String, String> headers = new HashMap<>() {
+            {
+                put(CLIENT_ID, clientId);
+                put(AUTHORIZATION, "Bearer " + token);
+            }
+        };
+
+        List<String> ids = new ArrayList<>();
+        try (Response response = get("https://api.twitch.tv/helix/eventsub/subscriptions", headers, null)) {
+            List<Map<String, Object>> data = (List<Map<String, Object>>) new ObjectMapper()
+                    .readValue(response.body().string(), new TypeReference<Map<String, Object>>() {
+                    }).get(DATA);
+
+            for (Map<String, Object> datum : data) {
+                ids.add((String) datum.get(ID));
+            }
+        }
+
+        return ids;
+    }
+
+    private void revokeSubscription(String token, String clientId, String id) throws IOException {
+        revokeSubscriptions(token, clientId, Arrays.asList(id));
+    }
+
+    @SuppressWarnings("serial")
+    private void revokeSubscriptions(String token, String clientId, List<String> ids) throws IOException {
+        Map<String, String> headers = new HashMap<>() {
+            {
+                put(CLIENT_ID, clientId);
+                put(AUTHORIZATION, "Bearer " + token);
+            }
+        };
+
+        for (String id : ids) {
+            Map<String, Object> params = new HashMap<>() {
+                {
+                    put(ID, id);
+                }
+            };
+
+            try (Response response = delete("https://api.twitch.tv/helix/eventsub/subscriptions", headers, params,
+                    RequestBody.create("{}", JSON))) {
+                // NOP, Just close response
             }
         }
     }
@@ -557,6 +623,32 @@ public class Function implements BackgroundFunction<PubSubMessage> {
         }
 
         Request.Builder reqBuilder = new Request.Builder().url(urlBuilder.build()).post(body);
+        if (headers != null) {
+            for (Map.Entry<String, String> header : headers.entrySet()) {
+                reqBuilder.addHeader(header.getKey(), header.getValue());
+            }
+        }
+
+        return callExternalAPI(reqBuilder.build());
+    }
+
+    @SuppressWarnings("unchecked")
+    private Response delete(String url, Map<String, String> headers, Map<String, Object> params, RequestBody body)
+            throws IOException {
+        HttpUrl.Builder urlBuilder = HttpUrl.parse(url).newBuilder();
+        if (params != null) {
+            for (Map.Entry<String, Object> param : params.entrySet()) {
+                if (param.getValue() instanceof List<?>) {
+                    for (String value : (List<String>) param.getValue()) {
+                        urlBuilder.addQueryParameter(param.getKey(), value);
+                    }
+                } else {
+                    urlBuilder.addQueryParameter(param.getKey(), (String) param.getValue());
+                }
+            }
+        }
+
+        Request.Builder reqBuilder = new Request.Builder().url(urlBuilder.build()).delete(body);
         if (headers != null) {
             for (Map.Entry<String, String> header : headers.entrySet()) {
                 reqBuilder.addHeader(header.getKey(), header.getValue());

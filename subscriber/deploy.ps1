@@ -1,3 +1,4 @@
+Set-Location -Path ${PSScriptRoot}
 mvn clean package
 gcloud beta functions deploy subscriber `
   --entry-point=com.syakeapps.tsn.subscriber.application.Function `
