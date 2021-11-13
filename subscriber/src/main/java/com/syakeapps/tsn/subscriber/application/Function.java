@@ -104,14 +104,14 @@ public class Function implements BackgroundFunction<PubSubMessage> {
         String slackEndpoint = System.getenv(SLACK_WEBHOOK_URL);
 
         try {
-            // >>>>>>>>>> Firebase初期化
-            LOGGER.info("Firebaseの初期化を開始します.");
+            // >>>>>>>>>> Firestore初期化
+            LOGGER.info("Firestoreの初期化を開始します.");
 
             Firestore db = initializeFirestore(projectId);
             DocumentReference docRef = db.collection(projectId).document(DOCUMENT_ID);
 
-            LOGGER.info("Firebaseの初期化が完了しました.");
-            // <<<<<<<<<< Firebase初期化
+            LOGGER.info("Firestoreの初期化が完了しました.");
+            // <<<<<<<<<< Firestore初期化
 
             // >>>>>>>>>> 保存済Twitchトークンの取得
             LOGGER.info("保存済Twitchトークンの取得を開始します.");
