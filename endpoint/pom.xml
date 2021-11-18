@@ -131,7 +131,7 @@
                             <goal>shade</goal>
                         </goals>
                         <configuration>
-                            <outputFile>${project.build.directory}/deployment/${build.finalName}.jar</outputFile>
+                            <outputFile>${project.build.directory}/deployment/${project.build.finalName}.jar</outputFile>
                             <transformers>
                                 <transformer
                                     implementation="org.apache.maven.plugins.shade.resource.DontIncludeResourceTransformer">
