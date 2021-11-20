@@ -22,6 +22,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import javax.xml.bind.DatatypeConverter;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.http.entity.ContentType;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -369,7 +370,7 @@ public class Function implements HttpFunction {
                     {
                         add(new HashMap<String, Object>() {
                             {
-                                put(TITLE, title == null ? "N/A" : title);
+                                put(TITLE, StringUtils.isEmpty(title) ? "N/A" : title);
                                 put(URL, String.format("https://www.twitch.tv/%s", userLoginName));
                                 put(COLOR, 9521150);
                                 put(AUTHOR, new HashMap<String, Object>() {
@@ -382,7 +383,7 @@ public class Function implements HttpFunction {
                                         add(new HashMap<String, Object>() {
                                             {
                                                 put(NAME, "Playing");
-                                                put(VALUE, gameName == null ? "N/A" : gameName);
+                                                put(VALUE, StringUtils.isEmpty(gameName) ? "N/A" : gameName);
                                                 put(INLINE, true);
                                             }
                                         });
@@ -402,9 +403,12 @@ public class Function implements HttpFunction {
             }
         };
 
-        try (Response response = post(url, headers, null,
-                RequestBody.create(new ObjectMapper().writeValueAsString(body), JSON))) {
+        String json = new ObjectMapper().writeValueAsString(body);
+
+        try (Response response = post(url, headers, null, RequestBody.create(json, JSON))) {
             if (!response.isSuccessful()) {
+                LOGGER.severe(String.format("Discord通知に失敗しました. REQUEST_BODY=[%s]", json));
+
                 throw new Exception(String.format("Failed to send message to Discord. STATUS_CODE=[%d], MESSAGE=[%s]",
                         response.code(), response.message()));
             }
@@ -469,9 +473,8 @@ public class Function implements HttpFunction {
                                                             {
                                                                 put(TYPE, "plain_text");
                                                                 put(TEXT,
-                                                                        exception == null
-                                                                                || exception.getMessage() == null
-                                                                                        ? "N/A"
+                                                                        exception == null || StringUtils
+                                                                                .isEmpty(exception.getMessage()) ? "N/A"
                                                                                         : exception.getMessage());
                                                             }
                                                         });
