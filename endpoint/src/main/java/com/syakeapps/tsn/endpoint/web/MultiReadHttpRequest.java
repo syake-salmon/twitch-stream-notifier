@@ -62,8 +62,7 @@ public class MultiReadHttpRequest implements HttpRequest {
 
     @Override
     public Map<String, List<String>> getHeaders() {
-        // TODO 自動生成されたメソッド・スタブ
-        return null;
+        return request.getHeaders();
     }
 
     @Override

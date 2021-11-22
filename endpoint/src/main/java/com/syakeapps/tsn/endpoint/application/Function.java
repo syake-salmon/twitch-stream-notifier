@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -122,6 +123,21 @@ public class Function implements HttpFunction {
         MultiReadHttpRequest mRequest = new MultiReadHttpRequest(request);
 
         try {
+            LOGGER.config("********** HTTP REQUEST DUMP **********");
+            Map<String, List<String>> headers = mRequest.getHeaders();
+            LOGGER.config("---------- HEADERS ----------");
+            for (Entry<String, List<String>> entry : headers.entrySet()) {
+                LOGGER.config("  " + entry.getKey() + ":");
+                entry.getValue().forEach(v -> {
+                    LOGGER.config("    " + v);
+                });
+            }
+            LOGGER.config("-----------------------------");
+            LOGGER.config("----------- BODY ------------");
+            LOGGER.config("  " + mRequest.getReader().lines().collect(Collectors.joining()));
+            LOGGER.config("-----------------------------");
+            LOGGER.config("***************************************");
+
             // >>>>>>>>>> HTTPメソッドの判別
             LOGGER.info("HTTPメソッドの判別を開始します.");
 
