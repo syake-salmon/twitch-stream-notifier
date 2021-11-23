@@ -123,20 +123,20 @@ public class Function implements HttpFunction {
         MultiReadHttpRequest mRequest = new MultiReadHttpRequest(request);
 
         try {
-            LOGGER.config("********** HTTP REQUEST DUMP **********");
+            LOGGER.info("********** HTTP REQUEST DUMP **********");
             Map<String, List<String>> headers = mRequest.getHeaders();
-            LOGGER.config("---------- HEADERS ----------");
+            LOGGER.info("---------- HEADERS ----------");
             for (Entry<String, List<String>> entry : headers.entrySet()) {
-                LOGGER.config("  " + entry.getKey() + ":");
+                LOGGER.info("  " + entry.getKey() + ":");
                 entry.getValue().forEach(v -> {
-                    LOGGER.config("    " + v);
+                    LOGGER.info("    " + v);
                 });
             }
-            LOGGER.config("-----------------------------");
-            LOGGER.config("----------- BODY ------------");
-            LOGGER.config("  " + mRequest.getReader().lines().collect(Collectors.joining()));
-            LOGGER.config("-----------------------------");
-            LOGGER.config("***************************************");
+            LOGGER.info("-----------------------------");
+            LOGGER.info("----------- BODY ------------");
+            LOGGER.info("  " + mRequest.getReader().lines().collect(Collectors.joining()));
+            LOGGER.info("-----------------------------");
+            LOGGER.info("***************************************");
 
             // >>>>>>>>>> HTTPメソッドの判別
             LOGGER.info("HTTPメソッドの判別を開始します.");
