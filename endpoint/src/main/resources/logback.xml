@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<configuration>
+  <appender name="CLOUD" class="com.google.cloud.logging.logback.LoggingAppender" />
+  <root level="INFO">
+    <appender-ref ref="CLOUD" />
+  </root>
+</configuration>

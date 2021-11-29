@@ -15,8 +15,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 import javax.crypto.Mac;
@@ -25,6 +23,8 @@ import javax.xml.bind.DatatypeConverter;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.entity.ContentType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -66,6 +66,7 @@ public class Function implements HttpFunction {
     private static final String TWITCH_EVENTSUB_MESSAGE_ID = "Twitch-Eventsub-Message-Id";
     private static final String TWITCH_EVENTSUB_MESSAGE_TIMESTAMP = "Twitch-Eventsub-Message-Timestamp";
     private static final String TWITCH_EVENTSUB_MESSAGE_SIGNATURE = "Twitch-Eventsub-Message-Signature";
+    private static final String TWITCH_EVENTSUB_MESSAGE_RETRY = "Twitch-Eventsub-Message-Retry";
     private static final String CLIENT_ID = "Client-Id";
     private static final String AUTHORIZATION = "Authorization";
     private static final String CONTENT_TYPE = "Content-Type";
@@ -112,7 +113,7 @@ public class Function implements HttpFunction {
     private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
     private static final String COLORHEX_DANGER = "#A30100";
     private static final String HMAC_SHA256 = "HMacSHA256";
-    private static final Logger LOGGER = Logger.getLogger(Function.class.getName());
+    private static final Logger LOGGER = LoggerFactory.getLogger(Function.class);
 
     @Override
     @SuppressWarnings("unchecked")
@@ -123,134 +124,149 @@ public class Function implements HttpFunction {
         MultiReadHttpRequest mRequest = new MultiReadHttpRequest(request);
 
         try {
-            LOGGER.info("********** HTTP REQUEST DUMP **********");
-            Map<String, List<String>> headers = mRequest.getHeaders();
-            LOGGER.info("---------- HEADERS ----------");
-            for (Entry<String, List<String>> entry : headers.entrySet()) {
-                LOGGER.info("  " + entry.getKey() + ":");
-                entry.getValue().forEach(v -> {
-                    LOGGER.info("    " + v);
-                });
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("********** HTTP REQUEST DUMP **********");
+                Map<String, List<String>> headers = mRequest.getHeaders();
+                LOGGER.debug("---------- HEADERS ----------");
+                for (Entry<String, List<String>> entry : headers.entrySet()) {
+                    LOGGER.debug("  " + entry.getKey() + ":");
+                    entry.getValue().forEach(v -> {
+                        LOGGER.debug("    " + v);
+                    });
+                }
+                LOGGER.debug("-----------------------------");
+                LOGGER.debug("----------- BODY ------------");
+                LOGGER.debug("  " + mRequest.getReader().lines().collect(Collectors.joining()));
+                LOGGER.debug("-----------------------------");
+                LOGGER.debug("***************************************");
             }
-            LOGGER.info("-----------------------------");
-            LOGGER.info("----------- BODY ------------");
-            LOGGER.info("  " + mRequest.getReader().lines().collect(Collectors.joining()));
-            LOGGER.info("-----------------------------");
-            LOGGER.info("***************************************");
 
             // >>>>>>>>>> HTTPメソッドの判別
-            LOGGER.info("HTTPメソッドの判別を開始します.");
+            LOGGER.trace("HTTPメソッドの判別を開始します.");
 
             String method = request.getMethod();
             if (!isSupportedMethod(method)) {
-                LOGGER.warning(String.format("HTTPメソッドが不正です. HTTP_METHOD=[%s]", method));
+                LOGGER.warn(String.format("HTTPメソッドが不正です. HTTP_METHOD=[%s]", method));
 
                 response.setStatusCode(HttpURLConnection.HTTP_BAD_METHOD);
                 return;
             }
 
-            LOGGER.info("HTTPメソッドの判別が完了しました.");
+            LOGGER.trace("HTTPメソッドの判別が完了しました.");
             // <<<<<<<<<< HTTPメソッドの判別
 
             // >>>>>>>>>> Firestore初期化
-            LOGGER.info("Firestoreの初期化を開始します.");
+            LOGGER.trace("Firestoreの初期化を開始します.");
 
             Firestore db = initializeFirestore(projectId);
             DocumentReference docRef = db.collection(projectId).document(DOCUMENT_ID);
 
-            LOGGER.info("Firestoreの初期化が完了しました.");
+            LOGGER.trace("Firestoreの初期化が完了しました.");
             // <<<<<<<<<< Firestore初期化
 
             // >>>>>>>>>> リクエストタイプの判別
-            LOGGER.info("リクエストタイプの判別を開始します.");
+            LOGGER.trace("リクエストタイプの判別を開始します.");
 
             String msgType = mRequest.getFirstHeader(TWITCH_EVENTSUB_MESSAGE_TYPE).get();
 
-            LOGGER.info(String.format("リクエストタイプの判別が完了しました. MESSAGE_TYPE=[%s]", msgType));
+            LOGGER.trace(String.format("リクエストタイプの判別が完了しました. MESSAGE_TYPE=[%s]", msgType));
             // <<<<<<<<<< リクエストタイプの判別
 
             if (msgType.equalsIgnoreCase(NOTIFICATION)) {
                 // >>>>>>>>>> Webhook通知のハンドリング
-                LOGGER.info("Webhook通知のハンドリングを開始します.");
+                LOGGER.trace("Webhook通知のハンドリングを開始します.");
 
                 // >>>>>>>>>> シグネチャヘッダの妥当性チェック
-                LOGGER.info("シグネチャヘッダの妥当性チェックを開始します.");
+                LOGGER.trace("シグネチャヘッダの妥当性チェックを開始します.");
 
                 // EventSubサブスクリプション秘密鍵を取得する（Webhook用）
                 String secret = (String) docRef.get().get().get(SUBSCRIPTION_SECRET_WEBHOOK);
                 if (!isValidSignature(HMAC_SHA256, mRequest, secret)) {
-                    LOGGER.severe("要求シグネチャヘッダが不正です.");
+                    LOGGER.error("要求シグネチャヘッダが不正です.");
 
                     response.setStatusCode(HttpURLConnection.HTTP_FORBIDDEN);
                     return;
                 }
 
-                LOGGER.info("シグネチャヘッダの妥当性チェックが完了しました.");
+                LOGGER.trace("シグネチャヘッダの妥当性チェックが完了しました.");
                 // <<<<<<<<<< シグネチャヘッダの妥当性チェック
 
+                // >>>>>>>>>> リトライヘッダのチェック
+                LOGGER.trace("リトライヘッダのチェックを開始します.");
+
+                String retry = mRequest.getFirstHeader(TWITCH_EVENTSUB_MESSAGE_RETRY).get();
+                if (Integer.valueOf(retry) > 0) {
+                    LOGGER.info(String.format("リトライ回数が１回以上のため処理を中断します. RETRY=[%s]", retry));
+                    response.setStatusCode(HttpURLConnection.HTTP_OK);
+                    return;
+                }
+
+                LOGGER.trace("リトライヘッダのチェックが完了しました.");
+                // <<<<<<<<<< リトライヘッダのチェック
+
                 // >>>>>>>>>> リクエストボディの解析
-                LOGGER.info("リクエストボディの解析を開始します.");
+                LOGGER.trace("リクエストボディの解析を開始します.");
 
                 Map<String, Object> event = (Map<String, Object>) new ObjectMapper()
                         .readValue(mRequest.getReader(), new TypeReference<Map<String, Object>>() {
                         }).get(EVENT);
 
-                LOGGER.info("リクエストボディの解析が完了しました.");
+                LOGGER.trace("リクエストボディの解析が完了しました.");
                 // <<<<<<<<<< リクエストボディの解析
 
                 // >>>>>>>>>> 保存済Twitchトークンの取得
-                LOGGER.info("保存済Twitchトークンの取得を開始します.");
+                LOGGER.trace("保存済Twitchトークンの取得を開始します.");
 
                 String token = (String) docRef.get().get().get(TWITCH_TOKEN);
 
-                LOGGER.info("保存済Twitchトークンの取得が完了しました.");
+                LOGGER.trace("保存済Twitchトークンの取得が完了しました.");
                 // <<<<<<<<<< 保存済Twitchトークンの取得
 
                 // >>>>>>>>>> 配信開始チャンネル情報の取得
-                LOGGER.info("配信開始チャンネル情報の取得を開始します.");
+                LOGGER.trace("配信開始チャンネル情報の取得を開始します.");
 
                 Map<String, Object> channelInfo = getChannelInfo(token, clientId,
                         (String) event.get(BROADCASTER_USER_ID));
 
-                LOGGER.info("配信開始チャンネル情報の取得が完了しました.");
+                LOGGER.trace("配信開始チャンネル情報の取得が完了しました.");
                 // <<<<<<<<<< 配信開始チャンネル情報の取得
 
                 // >>>>>>>>>> Discord通知処理
-                LOGGER.info("Discord通知処理を開始します.");
+                LOGGER.trace("Discord通知処理を開始します.");
 
                 sendToDiscord(System.getenv(DISCORD_WEBHOOK_URL), (String) event.get(BROADCASTER_USER_NAME),
                         (String) event.get(BROADCASTER_USER_LOGIN), (String) channelInfo.get(TITLE),
                         (String) channelInfo.get(GAME_NAME), (String) event.get(STARTED_AT));
 
-                LOGGER.info("Discord通知処理が完了しました.");
+                LOGGER.trace("Discord通知処理が完了しました.");
                 // <<<<<<<<<< Discord通知処理
 
-                LOGGER.info("Webhook通知のハンドリングが完了しました.");
+                LOGGER.trace("Webhook通知のハンドリングが完了しました.");
                 response.setStatusCode(HttpURLConnection.HTTP_OK);
                 return;
                 // <<<<<<<<<< Webhook通知のハンドリング
 
             } else if (msgType.equalsIgnoreCase(WEBHOOK_CALLBACK_VERIFICATION)) {
                 // >>>>>>>>>> サブスクリプション要求コールバックのハンドリング
-                LOGGER.info("サブスクリプション要求コールバックのハンドリングを開始します.");
+                LOGGER.trace("サブスクリプション要求コールバックのハンドリングを開始します.");
 
                 // >>>>>>>>>> シグネチャヘッダの妥当性チェック
-                LOGGER.info("シグネチャヘッダの妥当性チェックを開始します.");
+                LOGGER.trace("シグネチャヘッダの妥当性チェックを開始します.");
 
                 // EventSubサブスクリプション秘密鍵を取得する（コールバック用）
                 String secret = (String) docRef.get().get().get(SUBSCRIPTION_SECRET_CALLBACK);
                 if (!isValidSignature(HMAC_SHA256, mRequest, secret)) {
-                    LOGGER.severe("要求シグネチャヘッダが不正です.");
+                    LOGGER.error("要求シグネチャヘッダが不正です.");
 
                     response.setStatusCode(HttpURLConnection.HTTP_FORBIDDEN);
                     return;
                 }
 
-                LOGGER.info("シグネチャヘッダの妥当性チェックが完了しました.");
+                LOGGER.trace("シグネチャヘッダの妥当性チェックが完了しました.");
                 // <<<<<<<<<< シグネチャヘッダの妥当性チェック
 
                 // >>>>>>>>>> サブスクリプション要求コールバックへの応答書き込み
-                LOGGER.info("サブスクリプション要求コールバックへの応答書き込みを開始します.");
+                LOGGER.trace("サブスクリプション要求コールバックへの応答書き込みを開始します.");
 
                 String challenge = (String) new ObjectMapper()
                         .readValue(mRequest.getReader(), new TypeReference<Map<String, Object>>() {
@@ -258,46 +274,46 @@ public class Function implements HttpFunction {
 
                 new PrintWriter(response.getWriter()).print(challenge);
 
-                LOGGER.info("サブスクリプション要求コールバックへの応答書き込みが完了しました.");
+                LOGGER.trace("サブスクリプション要求コールバックへの応答書き込みが完了しました.");
                 // <<<<<<<<<< サブスクリプション要求コールバックへの応答書き込み
 
                 // >>>>>>>>>> EventSubサブスクリプション秘密鍵のDB保存
-                LOGGER.info("EventSubサブスクリプション秘密鍵のDB保存を開始します.");
+                LOGGER.trace("EventSubサブスクリプション秘密鍵のDB保存を開始します.");
 
                 // EventSubサブスクリプション秘密鍵（コールバック用）をWebhook用としてDBに保存する
                 docRef.update(SUBSCRIPTION_SECRET_WEBHOOK, secret).get();
 
-                LOGGER.info("EventSubサブスクリプション秘密鍵のDB保存が完了しました.");
+                LOGGER.trace("EventSubサブスクリプション秘密鍵のDB保存が完了しました.");
                 // <<<<<<<<<< EventSubサブスクリプション秘密鍵のDB保存
 
-                LOGGER.info("サブスクリプション要求コールバックのハンドリングが完了しました.");
+                LOGGER.trace("サブスクリプション要求コールバックのハンドリングが完了しました.");
                 response.setStatusCode(HttpURLConnection.HTTP_OK);
                 return;
                 // <<<<<<<<<< サブスクリプション要求コールバックのハンドリング
 
             } else if (msgType.equalsIgnoreCase(REVOCATION)) {
                 // >>>>>>>>>> サブスクリプション破棄コールバックのハンドリング
-                LOGGER.info("サブスクリプション破棄コールバックのハンドリングを開始します.");
+                LOGGER.trace("サブスクリプション破棄コールバックのハンドリングを開始します.");
 
                 String userId = (String) ((Map<String, Object>) ((Map<String, Object>) new ObjectMapper()
                         .readValue(mRequest.getReader(), new TypeReference<Map<String, Object>>() {
                         }).get(SUBSCRIPTION)).get(CONDITION)).get(BROADCASTER_USER_ID);
                 LOGGER.info(String.format("サブスクリプションが破棄されました. USER_ID=[%s]", userId));
 
-                LOGGER.info("サブスクリプション破棄コールバックのハンドリングが完了しました.");
+                LOGGER.trace("サブスクリプション破棄コールバックのハンドリングが完了しました.");
                 response.setStatusCode(HttpURLConnection.HTTP_OK);
                 return;
                 // <<<<<<<<<< サブスクリプション破棄コールバックのハンドリング
             }
 
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Twitch通知ハンドリング処理中に例外が発生しました.", e);
+            LOGGER.error("Twitch通知ハンドリング処理中に例外が発生しました.", e);
 
             try {
                 sendToSlack(System.getenv(SLACK_WEBHOOK_URL), COLORHEX_DANGER, "Twitch通知ハンドリング処理中に例外が発生しました.", e);
             } catch (Exception e2) {
                 // エラー通知処理の例外は握りつぶす
-                LOGGER.warning(String.format("Slackへのエラー通知に失敗しました. EXCEPTION_MESSAGE=[%s]", e2.getMessage()));
+                LOGGER.warn(String.format("Slackへのエラー通知に失敗しました. EXCEPTION_MESSAGE=[%s]", e2.getMessage()));
             }
 
             response.setStatusCode(HttpURLConnection.HTTP_INTERNAL_ERROR);
@@ -423,7 +439,7 @@ public class Function implements HttpFunction {
 
         try (Response response = post(url, headers, null, RequestBody.create(json, JSON))) {
             if (!response.isSuccessful()) {
-                LOGGER.severe(String.format("Discord通知に失敗しました. REQUEST_BODY=[%s]", json));
+                LOGGER.error(String.format("Discord通知に失敗しました. REQUEST_BODY=[%s]", json));
 
                 throw new Exception(String.format("Failed to send message to Discord. STATUS_CODE=[%d], MESSAGE=[%s]",
                         response.code(), response.message()));
