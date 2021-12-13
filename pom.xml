@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.syakeApps</groupId>
     <artifactId>twitch-stream-notifier</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>2021214</version>
     <packaging>pom</packaging>
     <properties>
         <encoding>UTF-8</encoding>
