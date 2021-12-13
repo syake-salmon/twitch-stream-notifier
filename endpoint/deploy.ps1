@@ -5,7 +5,7 @@ gcloud beta functions deploy endpoint `
   --trigger-http `
   --runtime=java11 `
   --min-instances=1 `
-  --max-instances=0 `
+  --max-instances=3000 `
   --env-vars-file=env.yml `
   --source=target/deployment `
   --allow-unauthenticated
