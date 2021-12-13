@@ -65,8 +65,7 @@ public class Function implements HttpFunction {
     private static final String TWITCH_EVENTSUB_MESSAGE_ID = "Twitch-Eventsub-Message-Id";
     private static final String TWITCH_EVENTSUB_MESSAGE_TIMESTAMP = "Twitch-Eventsub-Message-Timestamp";
     private static final String TWITCH_EVENTSUB_MESSAGE_SIGNATURE = "Twitch-Eventsub-Message-Signature";
-    // private static final String TWITCH_EVENTSUB_MESSAGE_RETRY =
-    // "Twitch-Eventsub-Message-Retry";
+    private static final String TWITCH_EVENTSUB_MESSAGE_RETRY = "Twitch-Eventsub-Message-Retry";
     private static final String CLIENT_ID = "Client-Id";
     private static final String AUTHORIZATION = "Authorization";
     private static final String CONTENT_TYPE = "Content-Type";
@@ -189,18 +188,18 @@ public class Function implements HttpFunction {
                 LOGGER.atFiner().log("シグネチャヘッダの妥当性チェックが完了しました.");
                 // <<<<<<<<<< シグネチャヘッダの妥当性チェック
 
-                // // >>>>>>>>>> リトライヘッダのチェック
-                // LOGGER.atFiner().log("リトライヘッダのチェックを開始します.");
-                //
-                // String retry = mRequest.getFirstHeader(TWITCH_EVENTSUB_MESSAGE_RETRY).get();
-                // if (Integer.valueOf(retry) > 0) {
-                // LOGGER.atInfo().log("リトライ回数が１回以上のため処理を中断します. RETRY=[%s]", retry);
-                // response.setStatusCode(HttpURLConnection.HTTP_OK);
-                // return;
-                // }
-                //
-                // LOGGER.atFiner().log("リトライヘッダのチェックが完了しました.");
-                // // <<<<<<<<<< リトライヘッダのチェック
+                // >>>>>>>>>> リトライヘッダのチェック
+                LOGGER.atFiner().log("リトライヘッダのチェックを開始します.");
+
+                String retry = mRequest.getFirstHeader(TWITCH_EVENTSUB_MESSAGE_RETRY).get();
+                if (Integer.valueOf(retry) > 0) {
+                    LOGGER.atInfo().log("リトライ回数が１回以上のため処理を中断します. RETRY=[%s]", retry);
+                    response.setStatusCode(HttpURLConnection.HTTP_OK);
+                    return;
+                }
+
+                LOGGER.atFiner().log("リトライヘッダのチェックが完了しました.");
+                // <<<<<<<<<< リトライヘッダのチェック
 
                 // >>>>>>>>>> リクエストボディの解析
                 LOGGER.atFiner().log("リクエストボディの解析を開始します.");
