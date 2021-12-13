@@ -7,8 +7,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -24,6 +22,7 @@ import com.google.cloud.firestore.DocumentReference;
 import com.google.cloud.firestore.Firestore;
 import com.google.cloud.functions.BackgroundFunction;
 import com.google.cloud.functions.Context;
+import com.google.common.flogger.FluentLogger;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
 import com.google.firebase.cloud.FirestoreClient;
@@ -93,7 +92,7 @@ public class Function implements BackgroundFunction<PubSubMessage> {
     /* OTHERS */
     private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
     private static final String COLORHEX_DANGER = "#DAA038";
-    private static final Logger LOGGER = Logger.getLogger(Function.class.getName());
+    private static final FluentLogger LOGGER = FluentLogger.forEnclosingClass();
 
     @Override
     public void accept(PubSubMessage payload, Context context) throws Exception {
@@ -105,27 +104,27 @@ public class Function implements BackgroundFunction<PubSubMessage> {
 
         try {
             // >>>>>>>>>> Firestore初期化
-            LOGGER.info("Firestoreの初期化を開始します.");
+            LOGGER.atFiner().log("Firestoreの初期化を開始します.");
 
             Firestore db = initializeFirestore(projectId);
             DocumentReference docRef = db.collection(projectId).document(DOCUMENT_ID);
 
-            LOGGER.info("Firestoreの初期化が完了しました.");
+            LOGGER.atFiner().log("Firestoreの初期化が完了しました.");
             // <<<<<<<<<< Firestore初期化
 
             // >>>>>>>>>> 保存済Twitchトークンの取得
-            LOGGER.info("保存済Twitchトークンの取得を開始します.");
+            LOGGER.atFiner().log("保存済Twitchトークンの取得を開始します.");
 
             String token = (String) docRef.get().get().get(TWITCH_TOKEN);
 
-            LOGGER.info("保存済Twitchトークンの取得が完了しました.");
+            LOGGER.atFiner().log("保存済Twitchトークンの取得が完了しました.");
             // <<<<<<<<<< 保存済Twitchトークンの取得
 
             // >>>>>>>>>> 保存済Twitchトークンの妥当性確認
-            LOGGER.info("保存済Twitchトークンの妥当性確認を開始します.");
+            LOGGER.atFiner().log("保存済Twitchトークンの妥当性確認を開始します.");
 
             if (!isValidToken(token)) {
-                LOGGER.warning("保存済Twitchトークンが不正です.再取得を試みます.");
+                LOGGER.atWarning().log("保存済Twitchトークンが不正です.再取得を試みます.");
 
                 // トークンが不正なら再取得する
                 token = generateNewToken(clientId, System.getenv(TWITCH_SECRET));
@@ -133,65 +132,64 @@ public class Function implements BackgroundFunction<PubSubMessage> {
                 docRef.update(TWITCH_TOKEN, token).get();
             }
 
-            LOGGER.info("保存済Twitchトークンの妥当性確認が完了しました.");
+            LOGGER.atFiner().log("保存済Twitchトークンの妥当性確認が完了しました.");
             // <<<<<<<<<< 保存済Twitchトークンの妥当性確認
 
             // >>>>>>>>>> 現サブスクリプションIDの取得
-            LOGGER.info("現サブスクリプションIDの取得を開始します.");
+            LOGGER.atFiner().log("現サブスクリプションIDの取得を開始します.");
 
             List<String> ids = getSubscriptionIds(token, clientId);
 
-            LOGGER.info(String.format("現サブスクリプションIDの取得が完了しました. ID_SIZE=[%d]", ids.size()));
+            LOGGER.atFiner().log("現サブスクリプションIDの取得が完了しました. ID_SIZE=[%d]", ids.size());
             // <<<<<<<<<< 現サブスクリプションIDの取得
 
             // >>>>>>>>>> 現サブスクリプションの破棄
-            LOGGER.info("現サブスクリプションの破棄を開始します.");
+            LOGGER.atFiner().log("現サブスクリプションの破棄を開始します.");
 
             revokeSubscriptions(token, clientId, ids);
 
-            LOGGER.info("現サブスクリプションの破棄が完了しました.");
+            LOGGER.atFiner().log("現サブスクリプションの破棄が完了しました.");
             // <<<<<<<<<< 現サブスクリプションの破棄
 
             // >>>>>>>>>> Twitchフォロイ―リストの取得
-            LOGGER.info("Twitchフォロイ―リストの取得を開始します.");
+            LOGGER.atFiner().log("Twitchフォロイ―リストの取得を開始します.");
 
             List<TwitchUser> followees = getFollows(token, clientId, myUserId);
 
-            LOGGER.info(String.format("Twitchフォロイ―リストの取得が完了しました. TWITCH_FOLLOWEES_SIZE=[%d], TWITCH_FOLLOWEES=[%s]",
-                    followees.size(), followees.stream().map(Object::toString).collect(Collectors.joining(", "))));
+            LOGGER.atFiner().log("Twitchフォロイ―リストの取得が完了しました. TWITCH_FOLLOWEES_SIZE=[%d], TWITCH_FOLLOWEES=[%s]",
+                    followees.size(), followees.stream().map(Object::toString).collect(Collectors.joining(", ")));
             // <<<<<<<<<< Twitchフォロイ―リストの取得
 
             // >>>>>>>>>> 自身のTwitchユーザ情報の取得
-            LOGGER.info("自身のTwitchユーザ情報の取得を開始します.");
+            LOGGER.atFiner().log("自身のTwitchユーザ情報の取得を開始します.");
 
             List<TwitchUser> users = getUsers(token, clientId, Arrays.asList(myUserId));
 
-            LOGGER.info(String.format("自身のTwitchユーザ情報の取得が完了しました. MY_TWITCH_ID=[%s], MY_TWITCH_USERNAME=[%s]",
-                    users.get(0).getId(), users.get(0).getName()));
+            LOGGER.atFiner().log("自身のTwitchユーザ情報の取得が完了しました. MY_TWITCH_ID=[%s], MY_TWITCH_USERNAME=[%s]",
+                    users.get(0).getId(), users.get(0).getName());
             // <<<<<<<<<< 自身のTwitchユーザ情報の取得
 
             // >>>>>>>>>> Twitchフォロイ―リストと自身のTwitchユーザ情報のマージ
-            LOGGER.info("Twitchフォロイ―リストと自身のTwitchユーザ情報のマージを開始します.");
+            LOGGER.atFiner().log("Twitchフォロイ―リストと自身のTwitchユーザ情報のマージを開始します.");
 
             List<TwitchUser> targets = Stream.concat(followees.stream(), users.stream()).collect(Collectors.toList());
 
-            LOGGER.info(
-                    String.format("Twitchフォロイ―リストと自身のTwitchユーザ情報のマージが完了しました. TARGET_USERS_SIZE=[%d], TARGER_USERS=[%s]",
-                            targets.size(), targets.stream().map(Object::toString).collect(Collectors.joining(", "))));
+            LOGGER.atFiner().log("Twitchフォロイ―リストと自身のTwitchユーザ情報のマージが完了しました. TARGET_USERS_SIZE=[%d], TARGER_USERS=[%s]",
+                    targets.size(), targets.stream().map(Object::toString).collect(Collectors.joining(", ")));
             // <<<<<<<<<< Twitchフォロイ―リストと自身のTwitchユーザ情報のマージ
 
             // >>>>>>>>>> EventSubサブスクリプション秘密鍵の生成
-            LOGGER.info("EventSubサブスクリプション秘密鍵の生成を開始します.");
+            LOGGER.atFiner().log("EventSubサブスクリプション秘密鍵の生成を開始します.");
 
             String preSubscriptionSecret = RandomStringUtils.randomAlphanumeric(100);
             // 生成した秘密鍵をDBに保存する（コールバック用）
             docRef.update(SUBSCRIPTION_SECRET_CALLBACK, preSubscriptionSecret).get();
 
-            LOGGER.info("EventSubサブスクリプション秘密鍵の生成が完了しました.");
+            LOGGER.atFiner().log("EventSubサブスクリプション秘密鍵の生成が完了しました.");
             // <<<<<<<<<< EventSubサブスクリプション秘密鍵の生成
 
             // >>>>>>>>>> EventSubサブスクリプションの要求
-            LOGGER.info("EventSubサブスクリプションの要求を開始します.");
+            LOGGER.atFiner().log("EventSubサブスクリプションの要求を開始します.");
 
             Map<TwitchUser, Map<String, String>> results = requestSubscription(token, clientId, targets,
                     System.getenv(CALLBACK_URL), preSubscriptionSecret);
@@ -204,13 +202,12 @@ public class Function implements BackgroundFunction<PubSubMessage> {
                 String message = entry.getValue().get("message");
 
                 if (status.equals("409")) {
-                    LOGGER.info(
-                            String.format("すでにサブスクリプション要求済のユーザです. TWITCH_USERNAME=[%s], STATUS_CODE=[%s], MESSAGE=[%s]",
-                                    name, status, message));
+                    LOGGER.atInfo().log("すでにサブスクリプション要求済のユーザです. TWITCH_USERNAME=[%s], STATUS_CODE=[%s], MESSAGE=[%s]",
+                            name, status, message);
                 } else if (!status.startsWith("2")) {
-                    LOGGER.warning(String.format(
+                    LOGGER.atWarning().log(
                             "サブスクリプション要求に失敗したユーザがいます. TWITCH_USERNAME=[%s], STATUS_CODE=[%s], MESSAGE=[%s]", name,
-                            status, message));
+                            status, message);
                     failCount++;
                 }
             }
@@ -222,21 +219,21 @@ public class Function implements BackgroundFunction<PubSubMessage> {
                 }
             } catch (Exception e1) {
                 // エラー通知の失敗は握りつぶす
-                LOGGER.log(Level.WARNING, "Slackへのエラー通知に失敗しました.", e1);
+                LOGGER.atWarning().withCause(e1).log("Slackへのエラー通知に失敗しました.");
             }
 
-            LOGGER.info("EventSubサブスクリプションの要求が完了しました.");
+            LOGGER.atFiner().log("EventSubサブスクリプションの要求が完了しました.");
             // <<<<<<<<<< EventSubサブスクリプションの要求
 
         } catch (Exception e2) {
-            LOGGER.log(Level.SEVERE, "EventSubサブスクリプション要求日次処理中に例外が発生しました.", e2);
+            LOGGER.atSevere().withCause(e2).log("EventSubサブスクリプション要求日次処理中に例外が発生しました.");
 
             // >>>>>>>>>> Slackへ例外情報の通知
             try {
                 sendToSlack(slackEndpoint, COLORHEX_DANGER, "Twitchサブスクリプション要求日次処理で例外が発生しました.", e2);
             } catch (Exception e3) {
                 // エラー通知の失敗は握りつぶす
-                LOGGER.warning(String.format("Slackへのエラー通知に失敗しました. EXCEPTION_MESSAGE=[%s]", e3.getMessage()));
+                LOGGER.atWarning().withCause(e3).log("Slackへのエラー通知に失敗しました.");
             }
             // <<<<<<<<<< Slackへ例外情報の通知
 
@@ -327,6 +324,7 @@ public class Function implements BackgroundFunction<PubSubMessage> {
         return ids;
     }
 
+    @SuppressWarnings("unused")
     private void revokeSubscription(String token, String clientId, String id) throws IOException {
         revokeSubscriptions(token, clientId, Arrays.asList(id));
     }

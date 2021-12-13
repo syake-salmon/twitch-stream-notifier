@@ -6,8 +6,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -17,6 +15,7 @@ import com.google.cloud.firestore.Firestore;
 import com.google.cloud.functions.HttpFunction;
 import com.google.cloud.functions.HttpRequest;
 import com.google.cloud.functions.HttpResponse;
+import com.google.common.flogger.FluentLogger;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
 import com.google.firebase.cloud.FirestoreClient;
@@ -50,7 +49,7 @@ public class Function implements HttpFunction {
 
     /* OTHERS */
     private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
-    private static final Logger LOGGER = Logger.getLogger(Function.class.getName());
+    private static final FluentLogger LOGGER = FluentLogger.forEnclosingClass();
 
     @Override
     public void service(HttpRequest request, HttpResponse response) throws Exception {
@@ -60,40 +59,40 @@ public class Function implements HttpFunction {
 
         try {
             // >>>>>>>>>> Firebase初期化
-            LOGGER.info("Firebaseの初期化を開始します.");
+            LOGGER.atFiner().log("Firebaseの初期化を開始します.");
 
             Firestore db = initializeFirestore(projectId);
             DocumentReference docRef = db.collection(projectId).document(DOCUMENT_ID);
 
-            LOGGER.info("Firebaseの初期化が完了しました.");
+            LOGGER.atFiner().log("Firebaseの初期化が完了しました.");
             // <<<<<<<<<< Firebase初期化
 
             // >>>>>>>>>> 保存済Twitchトークンの取得
-            LOGGER.info("保存済Twitchトークンの取得を開始します.");
+            LOGGER.atFiner().log("保存済Twitchトークンの取得を開始します.");
 
             String token = (String) docRef.get().get().get(TWITCH_TOKEN);
 
-            LOGGER.info("保存済Twitchトークンの取得が完了しました.");
+            LOGGER.atFiner().log("保存済Twitchトークンの取得が完了しました.");
             // <<<<<<<<<< 保存済Twitchトークンの取得
 
             // >>>>>>>>>> 現サブスクリプションIDの取得
-            LOGGER.info("現サブスクリプションIDの取得を開始します.");
+            LOGGER.atFiner().log("現サブスクリプションIDの取得を開始します.");
 
             List<String> ids = getSubscriptionIds(token, clientId);
 
-            LOGGER.info(String.format("現サブスクリプションIDの取得が完了しました. ID_SIZE=[%d]", ids.size()));
+            LOGGER.atFiner().log("現サブスクリプションIDの取得が完了しました. ID_SIZE=[%d]", ids.size());
             // <<<<<<<<<< 現サブスクリプションIDの取得
 
             // >>>>>>>>>> 現サブスクリプションの破棄
-            LOGGER.info("現サブスクリプションの破棄を開始します.");
+            LOGGER.atFiner().log("現サブスクリプションの破棄を開始します.");
 
             revokeSubscriptions(token, clientId, ids);
 
-            LOGGER.info("現サブスクリプションの破棄が完了しました.");
+            LOGGER.atFiner().log("現サブスクリプションの破棄が完了しました.");
             // <<<<<<<<<< 現サブスクリプションの破棄
 
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "メンテナンス処理中に例外が発生しました.");
+            LOGGER.atSevere().withCause(e).log("メンテナンス処理中に例外が発生しました.");
             throw e;
         }
     }
