@@ -281,7 +281,7 @@ public class Function implements BackgroundFunction<PubSubMessage> {
     private String generateNewToken(String clientId, String secret) throws Exception {
         Map<String, Object> params = new HashMap<>() {
             {
-                put(CLIENT_ID, clientId);
+                put("client_id", clientId); // なぜかこのヘッダだけアンダーバー…
                 put(CLIENT_SECRET, secret);
                 put(GRANT_TYPE, "client_credentials");
                 put(SCOPE, "user:read:follows");
