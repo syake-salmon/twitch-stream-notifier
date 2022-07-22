@@ -4,6 +4,7 @@ gcloud beta functions deploy maintenance `
   --entry-point=com.syakeapps.tsn.maintenance.application.Function `
   --trigger-http `
   --runtime=java11 `
+  --memory=128MB `
   --min-instances=0 `
   --max-instances=1 `
   --env-vars-file=env.yml `
